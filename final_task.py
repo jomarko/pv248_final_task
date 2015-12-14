@@ -112,7 +112,7 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
             if len(parts) == 2:
                 result = self.server.call_command(parts[0], parts[1])
             else:
-                result = self.server.call_command(parts[0], ' ')
+                result = self.server.call_command(parts[0], '')
 
             self.request.sendall(result)
 
@@ -123,16 +123,17 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 if __name__ == "__main__":
     options = init_options()
 
-    commands.expressions_file = options['file']
-    commands.init_expressions()
+    real_commands = commands.Commands(options['file'])
 
     server = ThreadedTCPServer((options['server'], int(options['port'])), ThreadedTCPRequestHandler, options['max'])
-    server.add_command("create", commands.f_create)
-    server.add_command("activate", commands.f_activate)
-    server.add_command("rm", commands.f_rm)
-    server.add_command("ls", commands.f_ls)
-    server.add_command("run", commands.f_run)
-    server.add_command("quit", commands.f_quit)
+    server.add_command("create", real_commands.f_create)
+    server.add_command("activate", real_commands.f_activate)
+    server.add_command("rm", real_commands.f_rm)
+    server.add_command("ls", real_commands.f_ls)
+    server.add_command("run", real_commands.f_run)
+    server.add_command("quit", real_commands.f_quit)
+    server.add_command("yes", real_commands.f_yes)
+    server.add_command("no", real_commands.f_no)
 
     ip, port = server.server_address
 
