@@ -3,7 +3,7 @@ import ConfigParser
 import SocketServer
 import threading
 import commands
-
+from commands import State as State
 
 __author__ = 'jomarko'
 
@@ -85,7 +85,9 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         SocketServer.TCPServer.__init__(self, server_address, request_handler)
         self.request_handler = request_handler
         self.commands_map = {}
-        self.max_clients = max_clients
+        self.max_clients = int(max_clients)
+        self.actual_clients = 0
+        self.lock = threading.Lock()
 
     def add_command(self, trigger, func):
         self.commands_map[trigger] = func
@@ -94,7 +96,7 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         if command in self.commands_map.keys():
             return self.commands_map[command](arg)
         else:
-            return command + " " + arg + "\n"
+            return State(State.NORMAL, command + " " + arg + "\n")
 
 
 class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
@@ -104,20 +106,41 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
         self.server = server
 
     def handle(self):
-        if threading.activeCount() - 1 <= self.server.max_clients:
-            data = self.request.recv(1024)
-            data = str.rstrip(data, "\r\n")
-            parts = data.split(' ', 1)
-            print parts
-            if len(parts) == 2:
-                result = self.server.call_command(parts[0], parts[1])
-            else:
-                result = self.server.call_command(parts[0], '')
+        self.server.lock.acquire()
+        self.server.actual_clients += 1
+        self.server.lock.release()
 
-            self.request.sendall(result)
+        old_result = State(State.NORMAL, "\n")
+
+        if self.server.actual_clients <= self.server.max_clients:
+            while True:
+                data = self.request.recv(1024)
+                data = str.rstrip(data, "\r\n")
+                parts = data.split(' ', 1)
+
+                if len(parts) == 2:
+                    result = self.server.call_command(parts[0], parts[1])
+                else:
+                    result = self.server.call_command(parts[0], '')
+
+                if old_result.state == State.WAIT:
+                    if result.state == State.YES:
+                        break
+                    elif result.state == State.NO:
+                        result.state == State.NORMAL
+                        result.message = "\n"
+                    else:
+                        result = old_result
+
+                old_result = result
+                self.request.sendall(result.message)
 
         else:
             self.request.sendall("Number of max clients exceeded\n")
+
+        self.server.lock.acquire()
+        self.server.actual_clients -= 1
+        self.server.lock.release()
 
 
 if __name__ == "__main__":
