@@ -8,16 +8,27 @@ from commands import State as State
 __author__ = 'jomarko'
 
 
-default_options = {"server": "localhost", "port": 8888, "max": 3, "file": "expressions.ini", "re": "[a-z]*"}
+default_options = {"server": "localhost", "port": 8888, "max": 3, "file": "expressions.ini", "re": []}
 
 
 def read_cfg_file(file_name, options):
     config = ConfigParser.SafeConfigParser()
     config.read(file_name)
 
-    for key in config.options("conf"):
-        if options[key] is None:
-            options[key] = config.get("conf", key)
+    if config.has_section("conf"):
+        for key in config.options("conf"):
+            if options[key] is None:
+                options[key] = config.get("conf", key)
+
+    expressions = []
+    if config.has_section("re"):
+        for key in config.options("re"):
+            expressions.append(key + " " + config.get("re", key))
+
+        if options["re"] is None:
+            options["re"] = expressions
+        else:
+            options["re"] += expressions
 
 
 def init_options() :
@@ -58,7 +69,7 @@ def init_options() :
         "-e", "--re",
         dest="re",
         type="string",
-        action="store",
+        action="append",
         help="regular expression",
     )
 
@@ -81,13 +92,30 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     # Ctrl-C will cleanly kill all spawned threads
     daemon_threads = True
 
-    def __init__(self, server_address, request_handler, max_clients):
+    def __init__(self, server_address, request_handler, max_clients, file, preconfigured_expressions):
         SocketServer.TCPServer.__init__(self, server_address, request_handler)
-        self.request_handler = request_handler
-        self.commands_map = {}
+        self.expressions = {}
+        self.preconfigured_expressions = preconfigured_expressions
         self.max_clients = int(max_clients)
+        self.file = file
         self.actual_clients = 0
         self.lock = threading.Lock()
+
+
+class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
+
+    def __init__(self, request, client_address, server):
+        self.commands_map = {}
+        real_commands = commands.Commands(server)
+        self.add_command("create", real_commands.f_create)
+        self.add_command("activate", real_commands.f_activate)
+        self.add_command("rm", real_commands.f_rm)
+        self.add_command("ls", real_commands.f_ls)
+        self.add_command("run", real_commands.f_run)
+        self.add_command("quit", real_commands.f_quit)
+        self.add_command("yes", real_commands.f_yes)
+        self.add_command("no", real_commands.f_no)
+        SocketServer.BaseRequestHandler.__init__(self, request, client_address, server)
 
     def add_command(self, trigger, func):
         self.commands_map[trigger] = func
@@ -97,13 +125,6 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
             return self.commands_map[command](arg)
         else:
             return State(State.NORMAL, command + " " + arg + "\n")
-
-
-class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
-
-    def __init__(self, request, client_address, server):
-        SocketServer.BaseRequestHandler.__init__(self, request, client_address, server)
-        self.server = server
 
     def handle(self):
         self.server.lock.acquire()
@@ -119,9 +140,9 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
                 parts = data.split(' ', 1)
 
                 if len(parts) == 2:
-                    result = self.server.call_command(parts[0], parts[1])
+                    result = self.call_command(parts[0], parts[1])
                 else:
-                    result = self.server.call_command(parts[0], '')
+                    result = self.call_command(parts[0], '')
 
                 if old_result.state == State.WAIT:
                     if result.state == State.YES:
@@ -146,17 +167,12 @@ class ThreadedTCPRequestHandler(SocketServer.BaseRequestHandler):
 if __name__ == "__main__":
     options = init_options()
 
-    real_commands = commands.Commands(options['file'])
+    server = ThreadedTCPServer((options['server'], int(options['port'])),
+                               ThreadedTCPRequestHandler,
+                               options['max'],
+                               options['file'],
+                               options['re'])
 
-    server = ThreadedTCPServer((options['server'], int(options['port'])), ThreadedTCPRequestHandler, options['max'])
-    server.add_command("create", real_commands.f_create)
-    server.add_command("activate", real_commands.f_activate)
-    server.add_command("rm", real_commands.f_rm)
-    server.add_command("ls", real_commands.f_ls)
-    server.add_command("run", real_commands.f_run)
-    server.add_command("quit", real_commands.f_quit)
-    server.add_command("yes", real_commands.f_yes)
-    server.add_command("no", real_commands.f_no)
 
     ip, port = server.server_address
 

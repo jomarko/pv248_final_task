@@ -1,31 +1,34 @@
 import ConfigParser
 import subprocess
 import re
-import threading
 from states import State
 
 
 class Commands:
-    def __init__(self, expressions_file):
-        self.expressions = {}
+    def __init__(self, server):
         self.active_expression = None
-        self.expressions_file = expressions_file
-        self.lock = threading.Lock()
+        self.server = server
         self.__init_expressions()
+        for e in server.preconfigured_expressions:
+            self.f_create(e)
 
     def f_create(self, arg):
         args = arg.split(" ", 1)
-        if not self.expressions.has_key(args[0]):
-            self.expressions[args[0]] = args[1]
-            self.__write_expression()
-
-        return State(State.NORMAL, "added\n")
+        if not self.server.expressions.has_key(args[0]):
+            if len(args) == 2:
+                self.server.expressions[args[0]] = args[1]
+                self.__write_expression()
+                return State(State.NORMAL, "added\n")
+            else:
+                return State(State.NORMAL, "missing argument\n")
+        else:
+            return State(State.NORMAL, "already exist\n")
 
     def f_activate(self, arg):
         if arg == '':
             self.active_expression = None
             return State(State.NORMAL, "deactivated\n")
-        elif self.expressions.has_key(arg):
+        elif self.server.expressions.has_key(arg):
             self.active_expression = arg
             return State(State.NORMAL, "activated: " + arg + "\n")
 
@@ -34,14 +37,14 @@ class Commands:
     def f_rm(self, arg):
         if arg == self.active_expression:
             self.active_expression = None
-        if self.expressions.has_key(arg):
-            self.expressions.pop(arg, None)
+        if self.server.expressions.has_key(arg):
+            self.server.expressions.pop(arg, None)
             self.__write_expression()
         return State(State.NORMAL, "removed: " + arg + "\n")
 
     def f_ls(self, arg):
         result = ""
-        for key in self.expressions.keys():
+        for key in self.server.expressions.keys():
             result += key + "\n"
 
         if len(result) > 0:
@@ -56,7 +59,7 @@ class Commands:
             lines = str(subprocess.check_output(arg.split(" "))).split("\n")
             result = ""
             for line in lines:
-                if re.match(self.expressions[self.active_expression], line):
+                if re.match(self.server.expressions[self.active_expression], line):
                     result += line + "\n"
 
             if len(result) > 0:
@@ -74,22 +77,23 @@ class Commands:
         return State(State.NO, "no " + arg + "\n")
 
     def __init_expressions(self):
-        self.lock.acquire()
+        self.server.lock.acquire()
         config = ConfigParser.SafeConfigParser()
-        config.read(self.expressions_file)
+        config.read(self.server.file)
 
-        for key in config.options("expressions"):
-            self.expressions[key] = config.get("expressions", key)
-        self.lock.release()
+        if config.has_section("expressions"):
+            for key in config.options("expressions"):
+                self.server.expressions[key] = config.get("expressions", key)
+        self.server.lock.release()
 
     def __write_expression(self):
-        self.lock.acquire()
-        cfgfile = open(self.expressions_file,'w')
+        self.server.lock.acquire()
+        cfgfile = open(self.server.file,'w')
         config = ConfigParser.SafeConfigParser()
         config.add_section("expressions")
 
-        for key, value in self.expressions.iteritems():
+        for key, value in self.server.expressions.iteritems():
             config.set("expressions", key, str(value))
 
         config.write(cfgfile)
-        self.lock.release()
+        self.server.lock.release()
