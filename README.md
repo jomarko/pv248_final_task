@@ -26,13 +26,9 @@ Other parameters are assumed as configuration files
 ###Stored regular expression are stored in files with section:
 * [expressions]
 
-###Example of usage:
+###How to run:
 
-[TERMINAL 1]
-
-python final_task.py --port 8765 --re "re_name .*[r].*" --file ./data/expressions.ini ./data/conf_1.ini ./data/conf_2.ini
-
-
-[TERMINAL 2]
-
-telnet 127.0.0.1 8765
+* Download this repo
+* python setup.py install
+* python -m regexp_server --port 8765 --re "re_name .*[r].*" --file ./data/expressions.ini ./data/conf_1.ini ./data/conf_2.ini
+* telnet 127.0.0.1 8765
