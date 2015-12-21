@@ -8,7 +8,7 @@ from commands import State as State
 __author__ = 'jomarko'
 
 
-default_options = {"server": "localhost", "port": 8888, "max": 3, "file": "expressions.ini", "re": []}
+default_options = {"server": "localhost", "port": 8888, "max": 3, "file": "./data/expressions.ini", "re": []}
 
 
 def read_cfg_file(file_name, options):
@@ -179,7 +179,4 @@ if __name__ == "__main__":
     # start server
     print "Running on: %s:%s" % (ip, port)
     server.serve_forever()
-
-    # use parser.error to report missing options or args:
-#    parser.error("Option X is not set")
 
