@@ -10,7 +10,7 @@
 * yes
 * no
 
-##Server can be configured with following parameters:
+###Server can be configured with following parameters:
 * server address:  --server
 * server port: --port
 * max number of connected clients: --max
@@ -19,14 +19,14 @@
 
 Other parameters are assumed as configuration files
 
-##In configuration files can be 2 sections:
+###In configuration files can be 2 sections:
 * [conf] - for configuration
 * [re] - for prepared regular expressions
 
-##Stored regular expression are stored in files with section:
+###Stored regular expression are stored in files with section:
 * [expressions]
 
-##Example of usage:
+###Example of usage:
 
 [TERMINAL 1]
 
